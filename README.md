@@ -191,3 +191,24 @@ codes, and input byte preservation. Disk tests compare complete reports with the
 memory backend, use an independent relational oracle, and exercise private-file
 cleanup and real storage-full/read-interruption failures. CI tests the installed package, not a
 materialized large join. No database service is required.
+
+## Frequency-scan implementation (0.2.1)
+
+After full profile validation, forecasting visits each left key once to count
+matches, check left uniqueness and maintain the bounded top-contributor heap.
+Each joinable left key needs one right-frequency lookup, regardless of `top`.
+Equal-contribution ties still prefer the left input's first-seen key. Validation
+and the right uniqueness scan remain complete, even with `top=0`.
+
+The SQLite CSV parser encodes each key once, tries an insert, then increments
+existing counts in SQL. It no longer reads a frequency back into Python for
+each CSV row. The private parser callback is supplied explicitly by the SQLite
+backend; ordinary mapping assignment still replaces a value rather than adding
+to it. No SQLite `RETURNING` support is needed.
+
+These are operation-count changes, not a promise of a particular speedup.
+SQLite is still an opt-in lower-memory tradeoff and can be slower than the
+in-memory backend. High `top` values retain up to that many contributor entries;
+there is no hard process-memory guarantee. Parsing, null handling, report fields,
+validation and contract failures are unchanged. Synthetic tests compare complete
+reports and stable ties, and independently enumerate row pairs for small cases.
