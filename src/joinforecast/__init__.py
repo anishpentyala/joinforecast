@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 class InputError(ValueError):
@@ -33,7 +33,7 @@ def read_csv(
     return _read_csv(path, columns, Counter(), null_values, delimiter, max_rows, max_keys)
 
 
-def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys):
+def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys, *, increment=None):
     """Shared complete-input parser; counts may be a disk-backed mapping."""
     columns = tuple(columns)
     if not columns or len(set(columns)) != len(columns):
@@ -65,7 +65,10 @@ def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys)
                 key = tuple(None if row[i] in null_values else row[i] for i in positions)
                 if None in key:
                     null_rows += 1
-                counts[key] = counts.get(key, 0) + 1
+                if increment is None:
+                    counts[key] = counts.get(key, 0) + 1
+                else:
+                    increment(key)
                 if len(counts) > max_keys:
                     raise InputError("Distinct-key limit exceeded; no complete forecast available")
     except (OSError, UnicodeError, csv.Error) as error:
@@ -143,9 +146,11 @@ def forecast(
         return nulls == "match" or None not in key
 
     inner = matched_left = matched_right = shared = many_many = 0
-    duplicate_left = sum(1 for k, n in left.counts.items() if n > 1 and joinable(k))
+    duplicate_left = 0
+    largest_heap = []
     duplicate_right = sum(1 for k, n in right.counts.items() if n > 1 and joinable(k))
-    for key, ln in left.counts.items():
+    for ordinal, (key, ln) in enumerate(left.counts.items()):
+        duplicate_left += ln > 1 and joinable(key)
         rn = right.counts.get(key, 0) if joinable(key) else 0
         if rn:
             inner += ln * rn
@@ -153,6 +158,15 @@ def forecast(
             matched_right += rn
             shared += 1
             many_many += ln > 1 and rn > 1
+            if top:
+                # Earlier left first-seen keys win equal-contribution ties.
+                # Unique ordinal precedes the key, so mixed None/string values
+                # are never compared by the heap.
+                entry = (ln * rn, -ordinal, ln, rn, key)
+                if len(largest_heap) < top:
+                    heapq.heappush(largest_heap, entry)
+                elif entry > largest_heap[0]:
+                    heapq.heapreplace(largest_heap, entry)
     unmatched_left = left.rows - matched_left
     unmatched_right = right.rows - matched_right
     predictions = {
@@ -164,20 +178,16 @@ def forecast(
         "right_anti": unmatched_right,
     }
 
-    def contributors():
-        for key, ln in left.counts.items():
-            rn = right.counts.get(key, 0) if joinable(key) else 0
-            if rn:
-                yield {
-                    "key": list(key),
-                    "left_rows": ln,
-                    "right_rows": rn,
-                    "joined_rows": ln * rn,
-                    "many_to_many": ln > 1 and rn > 1,
-                }
-
-    # Keep only top K contributors, rather than sorting or copying all keys.
-    largest = heapq.nlargest(top, contributors(), key=lambda row: row["joined_rows"])
+    largest = [
+        {
+            "key": list(key),
+            "left_rows": ln,
+            "right_rows": rn,
+            "joined_rows": product,
+            "many_to_many": ln > 1 and rn > 1,
+        }
+        for product, _, ln, rn, key in sorted(largest_heap, reverse=True)
+    ]
     violations = []
     if expectation in ("one-to-one", "one-to-many") and duplicate_left:
         violations.append("Left joinable keys are not unique")

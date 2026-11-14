@@ -61,6 +61,16 @@ class _DiskCounts(Mapping):
         else:
             self._execute("UPDATE counts SET n = ? WHERE key = ?", (count, encoded))
 
+    def _increment(self, key):
+        # Parser-only single increment; do not change generic mapping writes.
+        # No RETURNING clause, to retain compatibility with older SQLite.
+        encoded = self._encode(key)
+        cursor = self._execute("INSERT OR IGNORE INTO counts(key, n) VALUES (?, 1)", (encoded,))
+        if cursor.rowcount:
+            self.size += 1
+        else:
+            self._execute("UPDATE counts SET n = n + 1 WHERE key = ?", (encoded,))
+
     def __len__(self):
         if self.closed:
             raise InputError("Disk profile is closed; use it inside its context")
@@ -109,7 +119,16 @@ def sqlite_csv(
         counts._execute("CREATE TABLE counts(key TEXT PRIMARY KEY, n INTEGER NOT NULL)")
         # One transaction avoids a filesystem sync per input row.
         counts._execute("BEGIN")
-        profile = _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys)
+        profile = _read_csv(
+            path,
+            columns,
+            counts,
+            null_values,
+            delimiter,
+            max_rows,
+            max_keys,
+            increment=counts._increment,
+        )
         # Do not reinterpret an exception from the caller's with-body as storage
         # failure. Only our own database and filesystem operations are wrapped.
         yield profile
