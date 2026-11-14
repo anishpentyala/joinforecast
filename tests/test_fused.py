@@ -92,8 +92,8 @@ class FusedTests(unittest.TestCase):
             left.probes = right.probes = 0
             result = forecast(lp, rp, top=top)
             self.assertEqual(right.probes, 3)
-            self.assertEqual(left.scans, 2)  # validation + aggregation, not top scan
-            self.assertEqual(right.scans, 2)  # validation + right duplicates
+            self.assertEqual(left.scans, 1)  # validation and aggregation share one scan
+            self.assertEqual(right.scans, 1)  # validation and right duplicates share one scan
             self.assertEqual(result["predicted_rows"]["inner"], 9)
 
     def test_stable_ties_at_heap_boundary_and_mixed_null(self):

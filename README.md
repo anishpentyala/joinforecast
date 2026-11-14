@@ -212,3 +212,26 @@ in-memory backend. High `top` values retain up to that many contributor entries;
 there is no hard process-memory guarantee. Parsing, null handling, report fields,
 validation and contract failures are unchanged. Synthetic tests compare complete
 reports and stable ties, and independently enumerate row pairs for small cases.
+
+
+## Combined validation and aggregation (0.2.2)
+
+Forecasting now validates frequencies while using them, rather than scanning
+both complete mappings once for validation and again for aggregation. Each
+mapping's `items()` is traversed once. The right profile is fully checked while
+counting duplicate keys, then the left profile is checked while counting matches
+and selecting contributors. Totals are checked after each traversal. An invalid
+last key or inconsistent row total still raises an error, including with
+`top=0`; no partial forecast is returned.
+
+Accepted inputs produce the same complete reports, null semantics, stable ties,
+and contract results. If several inputs or options are invalid, which error is
+reported first can change. Profiles and mappings are not atomic snapshots, so do
+not mutate them during a forecast.
+
+This removes two full SQLite key-decoding passes. In a local Linux CPython 3.14
+measurement of the forecast alone over two 100,000-distinct-key profiles, the
+median of three fresh-process runs changed from 0.718 to 0.564 seconds for disk
+profiles. The in-memory case was slower, from 0.079 to 0.085 seconds. Input parsing
+was outside that timing; peak process RSS was similar. These are synthetic local
+measurements, not a universal speed or memory guarantee.

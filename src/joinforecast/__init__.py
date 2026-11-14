@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 
 class InputError(ValueError):
@@ -76,7 +76,7 @@ def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys,
     return Profile(counts, rows, null_rows, columns)
 
 
-def _validate_profile(profile):
+def _profile_shape(profile):
     if (
         not isinstance(profile, Profile)
         or not profile.columns
@@ -88,6 +88,9 @@ def _validate_profile(profile):
         )
     ):
         raise InputError("Expected a Profile with key columns")
+
+
+def _validated_items(profile):
     rows = null_rows = 0
     for key, count in profile.counts.items():
         if (
@@ -102,6 +105,7 @@ def _validate_profile(profile):
         rows += count
         if None in key:
             null_rows += count
+        yield key, count
     if rows != profile.rows or null_rows != profile.null_rows:
         raise InputError("Profile row totals do not match key frequencies")
 
@@ -123,8 +127,8 @@ def forecast(
     pandas CSV-loader simulation: string parsing and null tokens remain explicit.
     Uniqueness contracts apply to joinable keys, including unmatched keys.
     """
-    _validate_profile(left)
-    _validate_profile(right)
+    _profile_shape(left)
+    _profile_shape(right)
     if len(left.columns) != len(right.columns):
         raise InputError("Left and right key arities differ")
     if nulls not in ("never", "match"):
@@ -148,8 +152,8 @@ def forecast(
     inner = matched_left = matched_right = shared = many_many = 0
     duplicate_left = 0
     largest_heap = []
-    duplicate_right = sum(1 for k, n in right.counts.items() if n > 1 and joinable(k))
-    for ordinal, (key, ln) in enumerate(left.counts.items()):
+    duplicate_right = sum(1 for k, n in _validated_items(right) if n > 1 and joinable(k))
+    for ordinal, (key, ln) in enumerate(_validated_items(left)):
         duplicate_left += ln > 1 and joinable(key)
         rn = right.counts.get(key, 0) if joinable(key) else 0
         if rn:
