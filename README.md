@@ -96,6 +96,53 @@ Exit codes: **0** complete forecast satisfying requested contracts; **1** comple
 forecast with contract violations; **2** invalid/incomplete input or bad options.
 JSON `schema_version` is 1. `ok` means only that the requested contracts passed.
 
+## Opt-in disk-backed key frequencies
+
+The default backend keeps key frequencies in memory. If the distinct-key index
+is too large for that, use a private temporary SQLite database instead:
+
+```sh
+joinforecast large-left.csv large-right.csv --left-key id \
+  --storage sqlite --max-keys 5000000 --temp-dir /path/to/private/scratch
+```
+
+This uses Python's `sqlite3` module, not a database server. It writes exact key
+values and their frequencies to temporary disk. Use a suitable scratch location
+for sensitive data. The directory is private to the current user; normal success
+and errors close and remove both databases. Removal is **not secure erasure**.
+Forced termination or power loss can leave files behind. Other users with elevated
+access, disk backups, and filesystem snapshots may still expose the data.
+
+`--temp-dir` selects an existing parent directory, not a database filename. Omit
+it to use Python's normal temporary location. It requires `--storage sqlite`.
+An unwritable, missing, or full temporary location fails with exit 2 and no JSON
+forecast. Neither CSV input is modified. The SQLite backend needs a Python build
+with `sqlite3` support; the default memory backend does not.
+
+Counts, null rules, top-contributor tie order, contracts, and input limits stay the
+same. The default one-million distinct-key cap still applies: increase `--max-keys`
+explicitly if needed. The disk backend reduces Python memory spent on the key
+index, but adds database and disk I/O cost and may be much slower. SQLite's cache
+is configured to about 8 MiB per profile, **not a hard process-memory limit**.
+Long fields, database overhead, and `--top` also consume memory. Database storage
+includes an index and journal; allow more space than the CSV key bytes alone.
+
+Library callers use a context manager and keep every forecast inside it:
+
+```python
+from joinforecast import forecast
+from joinforecast.disk import sqlite_csv
+
+with sqlite_csv('orders.csv', ['customer_id']) as left:
+    with sqlite_csv('customers.csv', ['id']) as right:
+        report = forecast(left, right, expectation='many-to-one')
+# The JSON-compatible report is independent of the closed databases.
+```
+
+Disk profile frequencies are a mapping, not an in-memory `Counter`. Access the
+profile only inside its context; it cannot be used after cleanup. Normal
+`read_csv` still returns an in-memory `Counter` profile as before.
+
 ## Library
 
 ```python
@@ -107,7 +154,8 @@ report = forecast(left, right, nulls='never', expectation='many-to-one')
 print(report['predicted_rows']['left'])
 ```
 
-Input files are read only. There is no network code or telemetry. Reports include
+Input files are read only. There is no network code or telemetry.
+The opt-in SQLite backend writes key frequencies to temporary disk as described above. Reports include
 actual key values in `top_contributors`; treat redirected JSON as sensitive when
 your CSV contains private identifiers. `--top 0` omits those examples.
 
@@ -139,5 +187,7 @@ python -m build
 The test suite includes a seeded independent SQLite relational oracle for
 composite-key joins under SQL equality and null-equal semantics, hand-computed
 fanout, huge exact counts, malformed CSV rejection, contract failures, CLI exit
-codes, and input byte preservation. CI tests the installed package, not a
+codes, and input byte preservation. Disk tests compare complete reports with the
+memory backend, use an independent relational oracle, and exercise private-file
+cleanup and real storage-full/read-interruption failures. CI tests the installed package, not a
 materialized large join. No database service is required.
