@@ -3,10 +3,11 @@
 import csv
 import heapq
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 class InputError(ValueError):
@@ -15,7 +16,7 @@ class InputError(ValueError):
 
 @dataclass
 class Profile:
-    counts: Counter
+    counts: Mapping
     rows: int
     null_rows: int
     columns: tuple
@@ -29,6 +30,11 @@ def read_csv(
     Empty fields are null by default. Configure null_values explicitly to match
     the intended loader. Reject malformed or incomplete input, never sample.
     """
+    return _read_csv(path, columns, Counter(), null_values, delimiter, max_rows, max_keys)
+
+
+def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys):
+    """Shared complete-input parser; counts may be a disk-backed mapping."""
     columns = tuple(columns)
     if not columns or len(set(columns)) != len(columns):
         raise InputError("Key columns must be nonempty and distinct")
@@ -37,7 +43,6 @@ def read_csv(
     if any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in (max_rows, max_keys)):
         raise InputError("Resource limits must be nonnegative")
     null_values = frozenset(null_values)
-    counts = Counter()
     rows = null_rows = 0
     try:
         with Path(path).open(encoding="utf-8-sig", newline="") as stream:
@@ -60,7 +65,7 @@ def read_csv(
                 key = tuple(None if row[i] in null_values else row[i] for i in positions)
                 if None in key:
                     null_rows += 1
-                counts[key] += 1
+                counts[key] = counts.get(key, 0) + 1
                 if len(counts) > max_keys:
                     raise InputError("Distinct-key limit exceeded; no complete forecast available")
     except (OSError, UnicodeError, csv.Error) as error:
