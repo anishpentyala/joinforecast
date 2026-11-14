@@ -209,4 +209,4 @@ def forecast(
         "max_output_rows": max_output_rows,
         "violations": violations,
         "ok": not violations,
-      }
+    }
