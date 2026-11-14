@@ -227,4 +227,5 @@ def forecast(
         "require_match": require_match,
         "max_output_rows": max_output_rows,
         "violations": violations,
-        "ok": not violations,    }
+        "ok": not violations,
+    }
