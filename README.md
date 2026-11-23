@@ -7,7 +7,7 @@ Count CSV join rows before a many-to-many merge eats your memory.
 ## Quickstart
 
 ```sh
-python -m pip install "git+https://github.com/anishpentyala/joinforecast.git"
+python -m pip install joinforecast
 printf 'customer_id\n001\n001\n002\n' > orders.csv
 printf 'customer_id\n001\n001\n003\n' > customers.csv
 joinforecast orders.csv customers.csv --left-key customer_id
@@ -23,8 +23,7 @@ The four matching rows come from two orders times two customer records for `001`
 No join is built, and neither input is changed. Add `--expect many-to-one` to make
 repeated lookup keys fail the contract (exit 1, with a complete report).
 
-Installation is currently from source. A PyPI release is being prepared; do not
-assume `pip install joinforecast` is available until its package page is linked here.
+Install from [PyPI](https://pypi.org/project/joinforecast/). Python 3.9 or later is required.
 
 ## Details
 
@@ -44,7 +43,7 @@ cd joinforecast
 python -m pip install .
 ```
 
-This is a source-installable tool, not a claimed PyPI release.
+The source checkout is optional; the quickstart above installs from PyPI.
 
 ## Catch a broken lookup
 
