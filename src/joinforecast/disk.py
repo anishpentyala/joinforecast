@@ -85,7 +85,10 @@ class _DiskCounts(Mapping):
         except sqlite3.Error as error:
             raise InputError("Temporary profile storage: " + str(error)) from error
         finally:
-            cursor.close()
+            # The context may have closed the database while this generator was
+            # suspended. Do not replace the wrapped iteration error on resume.
+            if not self.closed:
+                _storage_call(cursor.close)
 
 
 @contextmanager
