@@ -1,5 +1,33 @@
 # joinforecast
 
+Count CSV join rows before a many-to-many merge eats your memory.
+
+[![Tests](https://github.com/anishpentyala/joinforecast/actions/workflows/tests.yml/badge.svg)](https://github.com/anishpentyala/joinforecast/actions)
+
+## Quickstart
+
+```sh
+python -m pip install "git+https://github.com/anishpentyala/joinforecast.git"
+printf 'customer_id\n001\n001\n002\n' > orders.csv
+printf 'customer_id\n001\n001\n003\n' > customers.csv
+joinforecast orders.csv customers.csv --left-key customer_id
+```
+
+This prints a full JSON report. Selected fields for these exact files:
+
+```json
+{"predicted_rows": {"inner": 4, "left": 5, "right": 5, "full": 6, "left_anti": 1, "right_anti": 1}}
+```
+
+The four matching rows come from two orders times two customer records for `001`.
+No join is built, and neither input is changed. Add `--expect many-to-one` to make
+repeated lookup keys fail the contract (exit 1, with a complete report).
+
+Installation is currently from source. A PyPI release is being prepared; do not
+assume `pip install joinforecast` is available until its package page is linked here.
+
+## Details
+
 Find a many-to-many row explosion before a CSV equality join, without building
 that join or uploading either file.
 
