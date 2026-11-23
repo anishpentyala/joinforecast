@@ -126,6 +126,62 @@ class DiskTests(unittest.TestCase):
         with self.assertRaisesRegex(InputError, "closed"):
             list(disk.counts.items())
 
+    def test_suspended_items_resume_after_context_reports_input_error(self):
+        path = self.csv("keys.csv", [("a", "1"), ("b", "2")])
+        with sqlite_csv(path, ["id"], temp_dir=self.parent) as disk:
+            rows = disk.counts.items()
+            self.assertEqual(next(rows), (("a",), 1))
+        with self.assertRaisesRegex(InputError, "closed database"):
+            next(rows)
+        self.assertEqual(list(self.parent.iterdir()), [])
+
+    def test_suspended_items_can_close_after_context(self):
+        path = self.csv("keys.csv", [("a", "1"), ("b", "2")])
+        with sqlite_csv(path, ["id"], temp_dir=self.parent) as disk:
+            rows = disk.counts.items()
+            next(rows)
+        rows.close()
+        self.assertEqual(list(self.parent.iterdir()), [])
+
+    def test_key_and_value_iterators_close_after_context(self):
+        path = self.csv("keys.csv", [("a", "1"), ("b", "2")])
+        with sqlite_csv(path, ["id"], temp_dir=self.parent) as disk:
+            keys = iter(disk.counts)
+            values = iter(disk.counts.values())
+            self.assertEqual(next(keys), ("a",))
+            self.assertEqual(next(values), 1)
+        with self.assertRaises(InputError):
+            next(keys)
+        with self.assertRaises(InputError):
+            next(values)
+        keys.close()
+        values.close()
+        self.assertEqual(list(self.parent.iterdir()), [])
+
+    def test_live_cursor_is_closed_on_early_generator_close(self):
+        from joinforecast.disk import _DiskCounts
+
+        cursor = mock.Mock()
+        cursor.__iter__ = mock.Mock(return_value=iter([('["a"]', 1), ('["b"]', 2)]))
+        counts = _DiskCounts(None)
+        with mock.patch.object(counts, "_execute", return_value=cursor):
+            rows = counts.items()
+            self.assertEqual(next(rows), (("a",), 1))
+            rows.close()
+        cursor.close.assert_called_once_with()
+
+    def test_in_context_cursor_close_failure_is_wrapped(self):
+        from joinforecast.disk import _DiskCounts
+
+        cursor = mock.Mock()
+        cursor.__iter__ = mock.Mock(return_value=iter([('["a"]', 1)]))
+        cursor.close.side_effect = sqlite3.OperationalError("close test")
+        counts = _DiskCounts(None)
+        with mock.patch.object(counts, "_execute", return_value=cursor):
+            with self.assertRaisesRegex(InputError, "close test"):
+                list(counts.items())
+        cursor.close.assert_called_once_with()
+
     def test_tie_order_matches_memory(self):
         path = self.csv("keys.csv", [(str(i), "x") for i in range(50, 0, -1)])
         memory = read_csv(path, ["id"])
