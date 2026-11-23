@@ -46,7 +46,7 @@ class ForecastTests(unittest.TestCase):
     def test_sqlite_oracle(self):
         # Independent relational execution, not a copy of frequency arithmetic.
         rng = random.Random(4237)
-        with sqlite3.connect(":memory:") as db:
+        with contextlib.closing(sqlite3.connect(":memory:")) as db:
             db.execute("CREATE TABLE l(k TEXT, q TEXT)")
             db.execute("CREATE TABLE r(k TEXT, q TEXT)")
             for trial in range(240):
