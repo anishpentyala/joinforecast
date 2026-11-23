@@ -3,13 +3,21 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
+readme = "README.md"
 name = "joinforecast"
 version = "0.2.2"
 description = "Offline, exact CSV equality-join row-count preflight"
 requires-python = ">=3.9"
 license = "MIT"
+authors = [{name = "Anish Pentyala"}]
+keywords = ["csv", "join", "data-quality", "etl"]
 license-files = ["LICENSE"]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/anishpentyala/joinforecast"
+Repository = "https://github.com/anishpentyala/joinforecast"
+Issues = "https://github.com/anishpentyala/joinforecast/issues"
 
 [project.scripts]
 joinforecast = "joinforecast.__main__:cli"
