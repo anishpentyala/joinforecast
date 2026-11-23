@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 dependencies = []
 
 [project.scripts]
-joinforecast = "joinforecast.__main__:main"
+joinforecast = "joinforecast.__main__:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
