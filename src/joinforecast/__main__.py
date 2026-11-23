@@ -8,8 +8,39 @@ from contextlib import ExitStack
 from . import InputError, __version__, forecast, read_csv
 
 
+def _write_text(stream, text):
+    if stream is None:
+        raise OSError("output stream is unavailable")
+    written = stream.write(text)
+    if type(written) is not int or written != len(text):
+        raise OSError("output stream did not accept complete text")
+    stream.flush()
+
+
+_DEFAULT_DESTINATION = object()
+
+
+class _ArgumentParser(argparse.ArgumentParser):
+    def _print_message(self, message, file=_DEFAULT_DESTINATION):
+        # New argparse versions can suppress immediate write errors.
+        if message:
+            _write_text(sys.stderr if file is _DEFAULT_DESTINATION else file, message)
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(
+    """Embedded entry point. Never close or replace caller streams."""
+    try:
+        return _main(argv)
+    except (OSError, ValueError) as error:
+        try:
+            _write_text(sys.stderr, "joinforecast: " + str(error) + "\n")
+        except (OSError, ValueError):
+            pass
+        return 2
+
+
+def _main(argv=None):
+    parser = _ArgumentParser(
         description="Forecast equality-join row counts without building the join."
     )
     parser.add_argument("--version", action="version", version=__version__)
@@ -87,11 +118,30 @@ def main(argv=None):
         result["csv_null_values"] = list(options["null_values"])
         result["delimiter"] = args.delimiter
     except InputError as error:
-        print("joinforecast: " + str(error), file=sys.stderr)
+        _write_text(sys.stderr, "joinforecast: " + str(error) + "\n")
         return 2
-    print(json.dumps(result, ensure_ascii=True, indent=2))
+    _write_text(sys.stdout, json.dumps(result, ensure_ascii=True, indent=2) + "\n")
     return 0 if result["ok"] else 1
 
 
+def cli(argv=None):
+    """Process-owned shutdown, shared by console and module launchers."""
+    try:
+        code = main(argv)
+    except SystemExit as error:
+        code = error.code
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name)
+        if stream is None:
+            continue
+        try:
+            stream.flush()
+        except (OSError, ValueError):
+            # Avoid CPython shutdown retry replacing documented exit2 with120.
+            setattr(sys, name, None)
+            code = 2
+    return code
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(cli())
