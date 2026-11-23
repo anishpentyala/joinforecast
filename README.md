@@ -93,7 +93,14 @@ subject to Python's CSV parser field-size limit. Output row arithmetic uses
 Python integers, with no floating-point rounding or output-row materialization.
 
 Exit codes: **0** complete forecast satisfying requested contracts; **1** complete
-forecast with contract violations; **2** invalid/incomplete input or bad options.
+forecast with contract violations; **2** invalid/incomplete input, bad options,
+or output-delivery failure. A successful report write must accept the complete
+text and flush before a normal verdict is returned. Help, version and argument
+messages use the same checked output path. If output fails, partial bytes may
+already have escaped; discard them, since they are not a delivered forecast.
+Diagnostics are best effort if stderr fails too. Embedded `main(argv)` leaves
+caller streams open and unchanged. The executable wrappers own shutdown and
+avoid retrying failed flushes that would otherwise turn exit 2 into exit 120.
 JSON `schema_version` is 1. `ok` means only that the requested contracts passed.
 
 ## Opt-in disk-backed key frequencies
