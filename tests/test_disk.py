@@ -57,7 +57,7 @@ class DiskTests(unittest.TestCase):
 
     def test_independent_relational_oracle(self):
         rng = random.Random(6198)
-        with sqlite3.connect(":memory:") as db:
+        with contextlib.closing(sqlite3.connect(":memory:")) as db:
             db.execute("CREATE TABLE l(a TEXT, b TEXT)")
             db.execute("CREATE TABLE r(a TEXT, b TEXT)")
             for _ in range(100):
