@@ -2,6 +2,8 @@
 
 import csv
 import heapq
+import os
+import stat
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -45,7 +47,13 @@ def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys,
     null_values = frozenset(null_values)
     rows = null_rows = 0
     try:
-        with Path(path).open(encoding="utf-8-sig", newline="") as stream:
+
+        def nonblocking(name, flags):
+            return os.open(name, flags | getattr(os, "O_NONBLOCK", 0))
+
+        with open(Path(path), encoding="utf-8-sig", newline="", opener=nonblocking) as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise InputError("CSV input must be a regular file")
             reader = csv.reader(stream, delimiter=delimiter, strict=True)
             header = next(reader, None)
             if not header or any(not name for name in header):
