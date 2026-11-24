@@ -269,3 +269,18 @@ median of three fresh-process runs changed from 0.718 to 0.564 seconds for disk
 profiles. The in-memory case was slower, from 0.079 to 0.085 seconds. Input parsing
 was outside that timing; peak process RSS was similar. These are synthetic local
 measurements, not a universal speed or memory guarantee.
+
+### CSV input boundary
+
+Both `read_csv` and `sqlite_csv` require regular CSV files. Ordinary symlinks to
+regular files are allowed. The parser checks the opened descriptor before
+reading; on systems with `O_NONBLOCK`, a FIFO without a producer is rejected
+without waiting for one. Devices, directories and missing inputs fail with
+`InputError` (CLI exit 2, no forecast on stdout). SQLite temporary profiles are
+cleaned up on these failures, including a bad right input after the left loaded.
+
+This is not a universal read timeout. Opening or reading a regular file on a
+slow filesystem can still wait, and a regular file may change while it is read.
+Pipes and process-substitution streams are not supported CSV inputs. CSV text,
+BOM handling, null policy and complete-input validation for regular files are
+unchanged.
