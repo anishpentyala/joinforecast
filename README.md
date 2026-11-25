@@ -284,3 +284,31 @@ slow filesystem can still wait, and a regular file may change while it is read.
 Pipes and process-substitution streams are not supported CSV inputs. CSV text,
 BOM handling, null policy and complete-input validation for regular files are
 unchanged.
+
+## Inspect unmatched key groups
+
+```sh
+joinforecast left.csv right.csv --left-key id --unmatched-top 5
+```
+
+Opt in to `unmatched_keys` without changing forecast or contract semantics.
+The API option is `forecast(left, right, unmatched_top=5)`. Omitting it keeps the
+existing report shape; zero includes group totals but no key-value witnesses.
+The limit must be a nonnegative integer, independently of `top` for matched-key
+contributors. Each side lists at most that many unmatched key groups by row
+frequency, with first-seen order breaking ties. It also reports all unmatched
+`key_groups` and `null_excluded_rows`, not just the displayed groups.
+
+Each witness has `key`, `rows` and `reason`: `NULLS_NEVER` means a null component
+prevents equality under the explicit `never` policy, even if the same tuple
+occurs on the other side. `NO_EQUAL_KEY` means no equal joinable tuple exists on
+the other side. With `nulls="match"`, null components can join and the latter
+reason may still apply to absent null-containing tuples. A zero null-excluded
+count is not proof all rows match. Existing anti-join row totals remain exact.
+
+These are key-frequency groups, not source-row samples or a diagnosis of why
+matches are missing. Values may be sensitive and appear in JSON stdout. No
+normalization, inferred spelling correction, join materialization or input edits
+occur. Memory and SQLite modes use the same logic and tie ordering. The option
+adds two full profile scans and opposite-side lookups, retaining at most the
+requested witnesses per side; it does not bound total RAM or lookup cost.

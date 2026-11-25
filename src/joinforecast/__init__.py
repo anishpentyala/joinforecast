@@ -127,6 +127,7 @@ def forecast(
     expectation=None,
     max_output_rows=None,
     require_match="none",
+    unmatched_top=None,
 ):
     """Forecast equality joins without materializing the output.
 
@@ -153,6 +154,11 @@ def forecast(
         or max_output_rows < 0
     ):
         raise InputError("Output row limit must be a nonnegative integer")
+
+    if unmatched_top is not None and (
+        isinstance(unmatched_top, bool) or not isinstance(unmatched_top, int) or unmatched_top < 0
+    ):
+        raise InputError("unmatched_top must be a nonnegative integer or None")
 
     def joinable(key):
         return nulls == "match" or None not in key
@@ -214,7 +220,7 @@ def forecast(
         for how in ("inner", "left", "right", "full"):
             if predictions[how] > max_output_rows:
                 violations.append("%s join exceeds output row limit" % how)
-    return {
+    report = {
         "schema_version": 1,
         "nulls": nulls,
         "left_rows": left.rows,
@@ -237,3 +243,43 @@ def forecast(
         "violations": violations,
         "ok": not violations,
     }
+
+    if unmatched_top is not None:
+
+        def contributors(profile, other):
+            heap = []
+            groups = 0
+            null_unmatched = 0
+            for ordinal, (key, count) in enumerate(_validated_items(profile)):
+                excluded_null = not joinable(key)
+                if excluded_null or not other.counts.get(key, 0):
+                    groups += 1
+                    if excluded_null:
+                        null_unmatched += count
+                    if unmatched_top:
+                        entry = (count, -ordinal, key, excluded_null)
+                        if len(heap) < unmatched_top:
+                            heapq.heappush(heap, entry)
+                        elif entry > heap[0]:
+                            heapq.heapreplace(heap, entry)
+            return {
+                "key_groups": groups,
+                "null_excluded_rows": null_unmatched,
+                "top": [
+                    {
+                        "key": list(key),
+                        "rows": count,
+                        "reason": "NULLS_NEVER" if excluded else "NO_EQUAL_KEY",
+                    }
+                    for count, _, key, excluded in sorted(heap, reverse=True)
+                ],
+            }
+
+        report["unmatched_keys"] = {
+            "limit_per_side": unmatched_top,
+            "left": contributors(left, right),
+            "right": contributors(right, left),
+            "scope": "Key-frequency groups, not source row samples or a cause of missing matches. "
+            "Null exclusion follows the explicit null policy; values may be sensitive.",
+        }
+    return report

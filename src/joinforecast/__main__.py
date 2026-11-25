@@ -70,6 +70,11 @@ def _main(argv=None):
     )
     parser.add_argument("--top", type=int, default=10)
     parser.add_argument(
+        "--unmatched-top",
+        type=int,
+        help="Include top unmatched key groups per side; discloses key values",
+    )
+    parser.add_argument(
         "--storage",
         choices=("memory", "sqlite"),
         default="memory",
@@ -114,6 +119,7 @@ def _main(argv=None):
                 expectation=args.expect,
                 max_output_rows=args.max_output_rows,
                 require_match=args.require_match,
+                unmatched_top=args.unmatched_top,
             )
         result["csv_null_values"] = list(options["null_values"])
         result["delimiter"] = args.delimiter
