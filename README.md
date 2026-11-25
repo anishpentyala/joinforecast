@@ -312,3 +312,22 @@ normalization, inferred spelling correction, join materialization or input edits
 occur. Memory and SQLite modes use the same logic and tie ordering. The option
 adds two full profile scans and opposite-side lookups, retaining at most the
 requested witnesses per side; it does not bound total RAM or lookup cost.
+
+### Explicit Python API option collections
+
+`read_csv` and `sqlite_csv` require `columns` to be an iterable of nonempty,
+distinct column-name strings, not one bare string or bytes value. Use
+`columns=['id']`, not `columns='id'`. Previously the latter could silently select
+separate columns `i` and `d` if both happened to exist. Likewise use
+`null_values=['NA']`, not `null_values='NA'`: a bare string previously split into
+single-character null tokens. These ambiguous forms now raise `InputError`
+before opening the CSV, as do non-string collection members and non-string or
+invalid delimiters. SQLite temporary files are cleaned up on these errors.
+
+Lists, tuples and one-shot generators are accepted. An empty null-token
+collection still disables null recognition, and explicitly listed
+single-character tokens remain valid. Duplicate null tokens remain harmless.
+Collections are consumed into memory before reading; this is not a bound on
+arbitrary or infinite iterables. The CLI already builds explicit lists, so its
+options, valid CSV parsing and report schema do not change. This stricter API
+input boundary is source-only, not a new package-index release.

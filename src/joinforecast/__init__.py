@@ -37,13 +37,30 @@ def read_csv(
 
 def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys, *, increment=None):
     """Shared complete-input parser; counts may be a disk-backed mapping."""
-    columns = tuple(columns)
-    if not columns or len(set(columns)) != len(columns):
-        raise InputError("Key columns must be nonempty and distinct")
-    if len(delimiter) != 1 or delimiter in "\r\n\0":
+    if isinstance(columns, (str, bytes)):
+        raise InputError("Key columns must be an iterable of column names, not one string")
+    try:
+        columns = tuple(columns)
+    except TypeError as error:
+        raise InputError("Key columns must be an iterable of column names") from error
+    if (
+        not columns
+        or any(not isinstance(name, str) or not name for name in columns)
+        or len(set(columns)) != len(columns)
+    ):
+        raise InputError("Key columns must be nonempty distinct strings")
+    if not isinstance(delimiter, str) or len(delimiter) != 1 or delimiter in "\r\n\0":
         raise InputError("Delimiter must be one non-newline character")
     if any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in (max_rows, max_keys)):
         raise InputError("Resource limits must be nonnegative")
+    if isinstance(null_values, (str, bytes)):
+        raise InputError("Null values must be an iterable of strings, not one string")
+    try:
+        null_values = tuple(null_values)
+    except TypeError as error:
+        raise InputError("Null values must be an iterable of strings") from error
+    if any(not isinstance(value, str) for value in null_values):
+        raise InputError("Null values must contain only strings")
     null_values = frozenset(null_values)
     rows = null_rows = 0
     try:
