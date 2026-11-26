@@ -68,6 +68,11 @@ def _main(argv=None):
     parser.add_argument(
         "--max-keys", type=int, default=1000000, help="Per file; fail rather than sample"
     )
+    parser.add_argument(
+        "--max-key-bytes",
+        type=int,
+        help="Per-file UTF-8 payload bytes across distinct normalized keys; not a RAM cap",
+    )
     parser.add_argument("--top", type=int, default=10)
     parser.add_argument(
         "--unmatched-top",
@@ -88,6 +93,7 @@ def _main(argv=None):
             delimiter=args.delimiter,
             max_rows=args.max_input_rows,
             max_keys=args.max_keys,
+            max_key_bytes=args.max_key_bytes,
         )
         if args.temp_dir is not None and args.storage != "sqlite":
             raise InputError("--temp-dir requires --storage sqlite")

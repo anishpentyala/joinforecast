@@ -25,17 +25,44 @@ class Profile:
 
 
 def read_csv(
-    path, columns, *, null_values=("",), delimiter=",", max_rows=10000000, max_keys=1000000
+    path,
+    columns,
+    *,
+    null_values=("",),
+    delimiter=",",
+    max_rows=10000000,
+    max_keys=1000000,
+    max_key_bytes=None,
 ):
     """Read selected keys as exact strings; no trimming or type inference.
 
     Empty fields are null by default. Configure null_values explicitly to match
     the intended loader. Reject malformed or incomplete input, never sample.
     """
-    return _read_csv(path, columns, Counter(), null_values, delimiter, max_rows, max_keys)
+    return _read_csv(
+        path,
+        columns,
+        Counter(),
+        null_values,
+        delimiter,
+        max_rows,
+        max_keys,
+        max_key_bytes=max_key_bytes,
+    )
 
 
-def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys, *, increment=None):
+def _read_csv(
+    path,
+    columns,
+    counts,
+    null_values,
+    delimiter,
+    max_rows,
+    max_keys,
+    *,
+    increment=None,
+    max_key_bytes=None,
+):
     """Shared complete-input parser; counts may be a disk-backed mapping."""
     if isinstance(columns, (str, bytes)):
         raise InputError("Key columns must be an iterable of column names, not one string")
@@ -53,6 +80,10 @@ def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys,
         raise InputError("Delimiter must be one non-newline character")
     if any(isinstance(n, bool) or not isinstance(n, int) or n < 0 for n in (max_rows, max_keys)):
         raise InputError("Resource limits must be nonnegative")
+    if max_key_bytes is not None and (
+        isinstance(max_key_bytes, bool) or not isinstance(max_key_bytes, int) or max_key_bytes < 0
+    ):
+        raise InputError("Key-byte limit must be a nonnegative integer or None")
     if isinstance(null_values, (str, bytes)):
         raise InputError("Null values must be an iterable of strings, not one string")
     try:
@@ -62,7 +93,7 @@ def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys,
     if any(not isinstance(value, str) for value in null_values):
         raise InputError("Null values must contain only strings")
     null_values = frozenset(null_values)
-    rows = null_rows = 0
+    rows = null_rows = key_bytes = 0
     try:
 
         def nonblocking(name, flags):
@@ -88,6 +119,14 @@ def _read_csv(path, columns, counts, null_values, delimiter, max_rows, max_keys,
                 if rows > max_rows:
                     raise InputError("Row limit exceeded; no complete forecast available")
                 key = tuple(None if row[i] in null_values else row[i] for i in positions)
+                if max_key_bytes is not None and key not in counts:
+                    key_bytes += sum(
+                        len(value.encode("utf-8")) for value in key if value is not None
+                    )
+                    if key_bytes > max_key_bytes:
+                        raise InputError(
+                            "Distinct-key byte limit exceeded; no complete forecast available"
+                        )
                 if None in key:
                     null_rows += 1
                 if increment is None:

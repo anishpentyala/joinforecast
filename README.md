@@ -331,3 +331,35 @@ Collections are consumed into memory before reading; this is not a bound on
 arbitrary or infinite iterables. The CLI already builds explicit lists, so its
 options, valid CSV parsing and report schema do not change. This stricter API
 input boundary is source-only, not a new package-index release.
+
+## Optional distinct-key byte budget
+
+Use `--max-key-bytes N` to limit the total UTF-8 string payload across distinct
+normalized key tuples **per input file**. The default is no byte budget. The
+library accepts `max_key_bytes=N` in both `read_csv()` and `sqlite_csv()`.
+
+```sh
+joinforecast left.csv right.csv --left-key id --max-key-bytes 16777216
+```
+
+Each distinct tuple is charged once. Repeated rows do not add bytes; the same
+string in two different tuples is charged in each tuple. Composite components
+are summed without separators. Configured null tokens become `None` before
+counting and contribute zero bytes. No Unicode normalization is applied, and
+UTF-8 bytes, rather than character counts, determine the charge. For example,
+`("雪", "😀")` costs 7 bytes; a budget of 7 accepts it, while 6 refuses it.
+A zero budget accepts header-only inputs and zero-payload keys.
+
+The check runs before an over-budget new key enters the frequency index. Both
+backends fail with exit 2 and no JSON forecast, rather than returning partial
+counts. SQLite temporary profiles are removed on normal error unwinding as
+usual. Accepted-input reports, null behavior and join counts are unchanged.
+The budget is independent for left and right inputs, not combined across them.
+
+This is **not a process-memory, disk-usage or total-input-byte limit**. Python
+objects, tuple/index overhead, SQLite JSON encoding and journals, headers,
+non-key fields and parser buffers are not charged. A row is already parsed when
+the check runs, and even a rejected candidate key temporarily occupies memory.
+The row and distinct-key caps still apply, including to empty/null keys. The
+optional budget adds a membership lookup for each row, which may slow SQLite
+input parsing. Omitting it keeps the existing parser lookup path.

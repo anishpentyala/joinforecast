@@ -100,6 +100,7 @@ def sqlite_csv(
     delimiter=",",
     max_rows=10000000,
     max_keys=1000000,
+    max_key_bytes=None,
     temp_dir=None,
 ):
     """Yield a Profile whose frequencies live in a private temporary database.
@@ -131,6 +132,7 @@ def sqlite_csv(
             max_rows,
             max_keys,
             increment=counts._increment,
+            max_key_bytes=max_key_bytes,
         )
         # Do not reinterpret an exception from the caller's with-body as storage
         # failure. Only our own database and filesystem operations are wrapped.
